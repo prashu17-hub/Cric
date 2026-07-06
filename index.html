@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cricket League Manager - Player Registration & League Standings</title>
+  <meta name="description" content="A premium cricket league administration and player performance tracker. Manage teams, players, schedule matches, and calculate league points in real time.">
+  <link rel="stylesheet" href="style.css">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="logo-section">
+        <div class="logo-icon">
+          <i data-lucide="trophy"></i>
+        </div>
+        <h1>LeagueManager</h1>
+      </div>
+      
+      <nav class="nav-menu">
+        <li class="nav-item active" data-view="dashboard">
+          <a href="#">
+            <i data-lucide="layout-dashboard"></i>
+            <span>Dashboard</span>
+          </a>
+        </li>
+        <li class="nav-item" data-view="players">
+          <a href="#">
+            <i data-lucide="users"></i>
+            <span>Player Directory</span>
+          </a>
+        </li>
+        <li class="nav-item" data-view="teams">
+          <a href="#">
+            <i data-lucide="shield"></i>
+            <span>Team Rosters</span>
+          </a>
+        </li>
+        <li class="nav-item" data-view="fixtures">
+          <a href="#">
+            <i data-lucide="calendar"></i>
+            <span>Match Center</span>
+          </a>
+        </li>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="league-badge">
+          <span class="league-badge-img">🏏</span>
+          <div class="league-badge-info">
+            <h4 id="sidebar-league-name">Pro Cricket League</h4>
+            <p>Season 2026</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Top Content Header -->
+      <header class="content-header">
+        <div class="header-title">
+          <h2 id="view-title">Dashboard Overview</h2>
+          <p id="view-subtitle">Real-time league standings, recent match results, and active teams.</p>
+        </div>
+        <div class="quick-actions">
+          <button class="btn btn-secondary" id="btn-add-team-trigger">
+            <i data-lucide="plus-circle"></i>
+            <span>New Team</span>
+          </button>
+          <button class="btn btn-primary" id="btn-add-player-trigger">
+            <i data-lucide="user-plus"></i>
+            <span>Register Player</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- VIEW 1: DASHBOARD VIEW -->
+      <section class="view-pane active" id="view-dashboard">
+        
+        <!-- Stats Row -->
+        <div class="stats-grid">
+          <div class="stat-card cyan">
+            <div class="stat-icon">
+              <i data-lucide="shield"></i>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Total Teams</span>
+              <span class="stat-value" id="stat-total-teams">0</span>
+            </div>
+          </div>
+          <div class="stat-card emerald">
+            <div class="stat-icon">
+              <i data-lucide="users"></i>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Active Players</span>
+              <span class="stat-value" id="stat-total-players">0</span>
+            </div>
+          </div>
+          <div class="stat-card amber">
+            <div class="stat-icon">
+              <i data-lucide="swords"></i>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Matches Played</span>
+              <span class="stat-value" id="stat-total-matches">0</span>
+            </div>
+          </div>
+          <div class="stat-card violet">
+            <div class="stat-icon">
+              <i data-lucide="award"></i>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Top Scorer</span>
+              <span class="stat-value" id="stat-top-scorer">None</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Layout Split -->
+        <div class="dashboard-layout">
+          <!-- Standings Table Card -->
+          <div class="glass-card">
+            <div class="card-header">
+              <h3>
+                <i data-lucide="award" style="color: var(--accent-amber)"></i>
+                League Standings
+              </h3>
+              <span class="badge badge-amber">Updated Live</span>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="standings-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Team</th>
+                    <th style="text-align: center;">P</th>
+                    <th style="text-align: center;">W</th>
+                    <th style="text-align: center;">L</th>
+                    <th style="text-align: center;">Pts</th>
+                    <th style="text-align: right;">NRR</th>
+                  </tr>
+                </thead>
+                <tbody id="standings-tbody">
+                  <!-- Injected by app.js -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Recent Matches / Activity Card -->
+          <div class="glass-card">
+            <div class="card-header">
+              <h3>
+                <i data-lucide="history" style="color: var(--accent-cyan)"></i>
+                Recent Results
+              </h3>
+              <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" id="nav-to-match-center">View All</button>
+            </div>
+            <div class="activity-list" id="recent-matches-list">
+              <!-- Injected by app.js -->
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- VIEW 2: PLAYERS VIEW -->
+      <section class="view-pane" id="view-players">
+        
+        <!-- Filter and Search Bar -->
+        <div class="filter-bar">
+          <div class="search-wrapper">
+            <i data-lucide="search"></i>
+            <input type="text" class="form-control search-input" id="player-search" placeholder="Search players by name...">
+          </div>
+          <div class="filter-groups">
+            <select class="form-control" id="filter-team" style="min-width: 150px;">
+              <option value="all">All Teams</option>
+              <!-- Populated dynamically -->
+            </select>
+            <select class="form-control" id="filter-role" style="min-width: 150px;">
+              <option value="all">All Roles</option>
+              <option value="Batsman">Batsman</option>
+              <option value="Bowler">Bowler</option>
+              <option value="All-Rounder">All-Rounder</option>
+              <option value="Wicketkeeper">Wicketkeeper</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Players Grid -->
+        <div class="player-grid" id="players-grid-container">
+          <!-- Populated dynamically -->
+        </div>
+
+      </section>
+
+      <!-- VIEW 3: TEAMS VIEW -->
+      <section class="view-pane" id="view-teams">
+        <div class="team-list-grid" id="teams-grid-container">
+          <!-- Populated dynamically -->
+        </div>
+      </section>
+
+      <!-- VIEW 4: MATCH CENTER / FIXTURES VIEW -->
+      <section class="view-pane" id="view-fixtures">
+        <div class="dashboard-layout">
+          <!-- Match Entry Form -->
+          <div class="glass-card">
+            <div class="card-header">
+              <h3>
+                <i data-lucide="swords" style="color: var(--accent-cyan)"></i>
+                Submit Match Score
+              </h3>
+            </div>
+            <form id="match-entry-form">
+              <div class="form-grid">
+                
+                <!-- Team 1 Selector & Score -->
+                <div class="form-group">
+                  <label for="match-team-1">Team 1</label>
+                  <select class="form-control" id="match-team-1" required>
+                    <option value="" disabled selected>Select Team 1</option>
+                    <!-- Populated dynamically -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="match-team-2">Team 2</label>
+                  <select class="form-control" id="match-team-2" required>
+                    <option value="" disabled selected>Select Team 2</option>
+                    <!-- Populated dynamically -->
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="match-score-1">Team 1 Score (Runs / Wickets)</label>
+                  <div style="display: flex; gap: 0.5rem;">
+                    <input type="number" class="form-control" id="match-runs-1" placeholder="Runs" min="0" required style="width: 60%">
+                    <input type="number" class="form-control" id="match-wickets-1" placeholder="Wkts" min="0" max="10" required style="width: 40%">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="match-score-2">Team 2 Score (Runs / Wickets)</label>
+                  <div style="display: flex; gap: 0.5rem;">
+                    <input type="number" class="form-control" id="match-runs-2" placeholder="Runs" min="0" required style="width: 60%">
+                    <input type="number" class="form-control" id="match-wickets-2" placeholder="Wkts" min="0" max="10" required style="width: 40%">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="match-overs-1">Team 1 Overs Played</label>
+                  <input type="number" class="form-control" id="match-overs-1" placeholder="Overs (e.g. 20)" min="0.1" step="0.1" max="20" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="match-overs-2">Team 2 Overs Played</label>
+                  <input type="number" class="form-control" id="match-overs-2" placeholder="Overs (e.g. 20)" min="0.1" step="0.1" max="20" required>
+                </div>
+                
+                <div class="form-group full-width">
+                  <label for="match-notes">Match Notes (Optional)</label>
+                  <input type="text" class="form-control" id="match-notes" placeholder="e.g. Semi Final, Warmup match, super-over thriller...">
+                </div>
+
+              </div>
+              
+              <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 1rem;">
+                <button type="reset" class="btn btn-secondary">Clear</button>
+                <button type="submit" class="btn btn-primary">
+                  <i data-lucide="check-circle-2"></i>
+                  <span>Record Result</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- All Matches log -->
+          <div class="glass-card">
+            <div class="card-header">
+              <h3>
+                <i data-lucide="history" style="color: var(--accent-emerald)"></i>
+                Fixture Log
+              </h3>
+              <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" id="btn-reset-matches">Reset Log</button>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Match</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody id="matches-log-tbody">
+                  <!-- Injected by app.js -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: Player Registration / Edit -->
+  <div class="modal-overlay" id="modal-player-registration">
+    <div class="modal-box">
+      <button class="modal-close-btn" id="modal-player-close">&times;</button>
+      <div class="modal-title">
+        <h3 id="player-modal-title-text">
+          <i data-lucide="user-plus" style="color: var(--accent-cyan)"></i>
+          Player Entry Form
+        </h3>
+      </div>
+      <form id="player-registration-form">
+        <input type="hidden" id="edit-player-id" value="">
+        <div class="form-grid">
+          
+          <div class="form-group full-width">
+            <label for="player-name">Full Name *</label>
+            <input type="text" class="form-control" id="player-name" placeholder="Enter player's first and last name" required>
+          </div>
+
+          <div class="form-group">
+            <label for="player-age">Age *</label>
+            <input type="number" class="form-control" id="player-age" placeholder="Age" min="15" max="50" required>
+          </div>
+
+          <div class="form-group">
+            <label for="player-team">Team Assignment *</label>
+            <select class="form-control" id="player-team" required>
+              <option value="" disabled selected>Select Team</option>
+              <!-- Injected dynamically -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="player-role">Specialist Role *</label>
+            <select class="form-control" id="player-role" required>
+              <option value="" disabled selected>Select Role</option>
+              <option value="Batsman">Batsman</option>
+              <option value="Bowler">Bowler</option>
+              <option value="All-Rounder">All-Rounder</option>
+              <option value="Wicketkeeper">Wicketkeeper-Batsman</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="player-jersey-num">Jersey Number *</label>
+            <input type="number" class="form-control" id="player-jersey-num" placeholder="Jersey #" min="1" max="999" required>
+          </div>
+
+          <div class="form-group">
+            <label for="player-batting-style">Batting Style *</label>
+            <select class="form-control" id="player-batting-style" required>
+              <option value="Right-Handed">Right-Handed</option>
+              <option value="Left-Handed">Left-Handed</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="player-bowling-style">Bowling Style</label>
+            <select class="form-control" id="player-bowling-style">
+              <option value="None">None / Does not bowl</option>
+              <option value="Right-Arm Fast">Right-Arm Fast</option>
+              <option value="Right-Arm Medium">Right-Arm Medium</option>
+              <option value="Right-Arm Spin">Right-Arm Spin (Off/Leg)</option>
+              <option value="Left-Arm Fast">Left-Arm Fast</option>
+              <option value="Left-Arm Spin">Left-Arm Spin</option>
+            </select>
+          </div>
+
+          <!-- Stats Block (Optional / Quick Entry) -->
+          <div class="form-group full-width" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+            <label style="color: var(--accent-cyan); font-weight: 600;">Player Statistics (Career/Season)</label>
+          </div>
+
+          <div class="form-group">
+            <label for="player-matches">Matches Played</label>
+            <input type="number" class="form-control" id="player-matches" placeholder="0" min="0" value="0">
+          </div>
+
+          <div class="form-group">
+            <label for="player-runs">Runs Scored</label>
+            <input type="number" class="form-control" id="player-runs" placeholder="0" min="0" value="0">
+          </div>
+
+          <div class="form-group">
+            <label for="player-high-score">High Score</label>
+            <input type="number" class="form-control" id="player-high-score" placeholder="0" min="0" value="0">
+          </div>
+
+          <div class="form-group">
+            <label for="player-wickets">Wickets Taken</label>
+            <input type="number" class="form-control" id="player-wickets" placeholder="0" min="0" value="0">
+          </div>
+
+          <div class="form-group">
+            <label for="player-best-bowling">Best Bowling (Runs conceded)</label>
+            <input type="number" class="form-control" id="player-best-bowling-runs" placeholder="Runs" min="0" value="0" style="margin-bottom: 0.5rem;">
+          </div>
+          <div class="form-group">
+            <label for="player-best-bowling-wickets">Best Bowling (Wickets taken)</label>
+            <input type="number" class="form-control" id="player-best-bowling-wickets" placeholder="Wkts" min="0" max="10" value="0">
+          </div>
+
+          <div class="form-group full-width">
+            <label>Jersey Theme Accent Color</label>
+            <div class="jersey-picker">
+              <label class="jersey-option" style="color: #3b82f6;">
+                <input type="radio" name="jersey-theme" value="#3b82f6" checked>
+                <div class="jersey-visual" style="background: rgba(59, 130, 246, 0.2); color: #3b82f6;">🔵</div>
+              </label>
+              <label class="jersey-option" style="color: #ef4444;">
+                <input type="radio" name="jersey-theme" value="#ef4444">
+                <div class="jersey-visual" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">🔴</div>
+              </label>
+              <label class="jersey-option" style="color: #10b981;">
+                <input type="radio" name="jersey-theme" value="#10b981">
+                <div class="jersey-visual" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">🟢</div>
+              </label>
+              <label class="jersey-option" style="color: #f59e0b;">
+                <input type="radio" name="jersey-theme" value="#f59e0b">
+                <div class="jersey-visual" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">🟡</div>
+              </label>
+              <label class="jersey-option" style="color: #8b5cf6;">
+                <input type="radio" name="jersey-theme" value="#8b5cf6">
+                <div class="jersey-visual" style="background: rgba(139, 92, 246, 0.2); color: #8b5cf6;">🟣</div>
+              </label>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
+          <button type="button" class="btn btn-secondary" id="btn-player-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-player-submit">
+            <i data-lucide="check-circle-2"></i>
+            <span>Save Player</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Team Creation -->
+  <div class="modal-overlay" id="modal-team-creation">
+    <div class="modal-box">
+      <button class="modal-close-btn" id="modal-team-close">&times;</button>
+      <div class="modal-title">
+        <h3>
+          <i data-lucide="plus-circle" style="color: var(--accent-cyan)"></i>
+          Create New Team
+        </h3>
+      </div>
+      <form id="team-creation-form">
+        <div class="form-grid">
+          
+          <div class="form-group full-width">
+            <label for="team-name">Team Name *</label>
+            <input type="text" class="form-control" id="team-name" placeholder="e.g. Royal Challengers, Mumbai Titans" required>
+          </div>
+
+          <div class="form-group">
+            <label for="team-abbv">Team Abbreviation (3-4 Letters) *</label>
+            <input type="text" class="form-control" id="team-abbv" placeholder="e.g. RCB, MMT" maxlength="4" style="text-transform: uppercase;" required>
+          </div>
+
+          <div class="form-group">
+            <label for="team-color">Primary Accent Color *</label>
+            <input type="color" class="form-control" id="team-color" value="#06b6d4" style="padding: 0.25rem 0.5rem; height: 45px; width: 100%;" required>
+          </div>
+
+        </div>
+
+        <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
+          <button type="button" class="btn btn-secondary" id="btn-team-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i data-lucide="check-circle-2"></i>
+            <span>Add Team</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Player Details Profile -->
+  <div class="modal-overlay" id="modal-player-detail">
+    <div class="modal-box" style="width: 550px;">
+      <button class="modal-close-btn" id="modal-detail-close">&times;</button>
+      
+      <div class="detail-modal-layout">
+        <!-- Jersey Avatar + Name summary -->
+        <div class="detail-player-header">
+          <div id="detail-jersey-placeholder">
+            <!-- Jersey SVG injected by JS -->
+          </div>
+          <div class="detail-player-summary">
+            <h4 id="detail-name">Player Name</h4>
+            <p id="detail-team-role">Batsman &bull; Team Name</p>
+            <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;" id="detail-badges-container">
+              <!-- Dynamically injected badges -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Capability Stat Bars -->
+        <div class="stat-bars-container">
+          <!-- Batting rating -->
+          <div class="stat-bar-group">
+            <div class="stat-bar-label">
+              <span>Batting Prowess</span>
+              <span id="detail-batting-rating-num">0%</span>
+            </div>
+            <div class="stat-bar-track">
+              <div class="stat-bar-fill" id="detail-batting-rating-bar"></div>
+            </div>
+          </div>
+
+          <!-- Bowling rating -->
+          <div class="stat-bar-group">
+            <div class="stat-bar-label">
+              <span>Bowling Prowess</span>
+              <span id="detail-bowling-rating-num">0%</span>
+            </div>
+            <div class="stat-bar-track">
+              <div class="stat-bar-fill" id="detail-bowling-rating-bar"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Career statistics grids -->
+        <div class="detail-metrics-grid">
+          <div class="detail-metric-card">
+            <h5>Matches</h5>
+            <p id="detail-matches">0</p>
+          </div>
+          <div class="detail-metric-card">
+            <h5>Total Runs</h5>
+            <p id="detail-runs">0</p>
+          </div>
+          <div class="detail-metric-card">
+            <h5>Batting Average</h5>
+            <p id="detail-batting-avg">0.00</p>
+          </div>
+          <div class="detail-metric-card">
+            <h5>High Score</h5>
+            <p id="detail-high-score">0</p>
+          </div>
+          <div class="detail-metric-card">
+            <h5>Wickets</h5>
+            <p id="detail-wickets">0</p>
+          </div>
+          <div class="detail-metric-card">
+            <h5>Best Bowling</h5>
+            <p id="detail-best-bowling">0/0</p>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+          <button class="btn btn-secondary" style="flex-grow: 1;" id="btn-detail-edit">
+            <i data-lucide="edit"></i>
+            <span>Edit Profile</span>
+          </button>
+          <button class="btn btn-danger" style="flex-grow: 1;" id="btn-detail-delete">
+            <i data-lucide="trash-2"></i>
+            <span>Delete Player</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- App Code -->
+  <script src="app.js"></script>
+</body>
+</html>
