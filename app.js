@@ -2,10 +2,10 @@
 
 // 1. Initial State Data (Mock Data for instant preview)
 const defaultTeams = [
-  { id: "team-1", name: "Bengaluru Cobras", abbv: "BCB", color: "#3b82f6" },
-  { id: "team-2", name: "Mumbai Mavericks", abbv: "MMV", color: "#ef4444" },
-  { id: "team-3", name: "Chennai Stallions", abbv: "CST", color: "#f59e0b" },
-  { id: "team-4", name: "Delhi Dynamites", abbv: "DDY", color: "#10b981" }
+  { id: "team-1", name: "Palamaner", abbv: "BCB", color: "#3b82f6" },
+  { id: "team-2", name: "Chittoor", abbv: "MMV", color: "#ef4444" },
+  { id: "team-3", name: "Tirupati", abbv: "CST", color: "#f59e0b" },
+  { id: "team-4", name: "Punganur", abbv: "DDY", color: "#10b981" }
 ];
 
 const defaultPlayers = [
@@ -926,3 +926,8 @@ function renderApp() {
 document.addEventListener("DOMContentLoaded", () => {
   renderApp();
 });
+
+// Expose functions globally for dynamic inline HTML onclick events
+window.viewPlayerProfile = viewPlayerProfile;
+window.editPlayer = editPlayer;
+window.viewTeamRoster = viewTeamRoster;

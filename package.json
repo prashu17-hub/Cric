@@ -1,8 +1,7 @@
 {
   "name": "cricket-league-manager",
   "version": "1.0.0",
-  "description": "Cricket League Management & Player Registration System",
-  "main": "index.html",
+  "private": true,
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -12,4 +11,3 @@
     "vite": "^5.2.0"
   }
 }
-
