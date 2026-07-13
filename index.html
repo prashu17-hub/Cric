@@ -47,6 +47,13 @@
             <span>Match Center</span>
           </a>
         </li>
+        <li class="nav-item" data-view="sync">
+          <a href="#">
+            <i data-lucide="refresh-cw"></i>
+            <span>Cloud Sync</span>
+            <span class="sync-dot status-offline" id="sidebar-sync-dot"></span>
+          </a>
+        </li>
       </nav>
       
       <div class="sidebar-footer">
@@ -305,6 +312,105 @@
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: CLOUD SYNC VIEW -->
+      <section class="view-pane" id="view-sync">
+        <div class="glass-card" style="max-width: 600px; margin: 2rem auto;">
+          <div class="card-header">
+            <h3>
+              <i data-lucide="refresh-cw" style="color: var(--accent-cyan)"></i>
+              Sync Across Devices
+            </h3>
+          </div>
+          
+          <div class="sync-card-body" style="padding: 1.5rem;">
+            <p style="margin-bottom: 1.5rem; color: var(--text-secondary); line-height: 1.6;">
+              By default, all team rosters and player registrations are stored locally on this device. 
+              Enable Cloud Sync to backup your data and synchronize it across multiple devices and users (phones, tablets, PCs).
+            </p>
+
+            <div id="sync-setup-section">
+              <!-- If sync is NOT active -->
+              <div id="sync-inactive-pane">
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                  <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 1.25rem; border-radius: var(--radius-md);">
+                    <h4 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
+                      <i data-lucide="cloud-lightning" style="color: var(--accent-cyan); width: 18px; height: 18px;"></i>
+                      Option A: Create a New Sync Session
+                    </h4>
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                      Start a new database cloud sync. This will upload your current local data to the cloud.
+                    </p>
+                    <button class="btn btn-primary" id="btn-enable-sync">
+                      <i data-lucide="cloud-upload"></i>
+                      <span>Enable Cloud Sync</span>
+                    </button>
+                  </div>
+
+                  <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 1.25rem; border-radius: var(--radius-md);">
+                    <h4 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
+                      <i data-lucide="link" style="color: var(--accent-emerald); width: 18px; height: 18px;"></i>
+                      Option B: Join Existing Sync Session
+                    </h4>
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                      If you already enabled sync on another device, enter the Sync Code here to sync this device.
+                    </p>
+                    <div style="display: flex; gap: 0.5rem;">
+                      <input type="text" class="form-control" id="sync-code-input" placeholder="Paste Sync Code here..." style="font-family: monospace; letter-spacing: 0.5px;">
+                      <button class="btn btn-emerald" id="btn-join-sync">
+                        <i data-lucide="check"></i>
+                        <span>Connect</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- If sync IS active -->
+              <div id="sync-active-pane" class="hidden" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.15); padding: 1.25rem; border-radius: var(--radius-md);">
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                      <i data-lucide="check-circle" style="color: var(--accent-emerald)"></i>
+                      <h4 style="color: var(--text-primary); margin: 0;">Cloud Sync is Active</h4>
+                    </div>
+                    <span class="badge badge-emerald" id="sync-status-badge">Synced</span>
+                  </div>
+                  
+                  <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                    Your data is safely backed up in the cloud and auto-saves on every registration or change.
+                  </p>
+
+                  <div style="margin-bottom: 1.25rem;">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.5rem; letter-spacing: 0.5px;">
+                      Your Shared Sync Code
+                    </label>
+                    <div style="display: flex; gap: 0.5rem; background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.08);">
+                      <code id="display-sync-code" style="flex-grow: 1; align-self: center; font-family: monospace; font-size: 1.1rem; color: var(--accent-cyan); word-break: break-all; padding: 0 0.5rem;">Loading...</code>
+                      <button class="btn btn-secondary" id="btn-copy-sync-code" style="padding: 0.375rem 0.75rem; min-width: auto; font-size: 0.875rem;">
+                        <i data-lucide="copy" style="width: 16px; height: 16px;"></i>
+                        <span>Copy</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; gap: 1rem; margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem;">
+                    <button class="btn btn-secondary" id="btn-sync-now" style="font-size: 0.875rem;">
+                      <i data-lucide="refresh-cw"></i>
+                      <span>Sync Now</span>
+                    </button>
+                    <button class="btn btn-danger" id="btn-disconnect-sync" style="font-size: 0.875rem;">
+                      <i data-lucide="unlink"></i>
+                      <span>Disconnect Sync</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>

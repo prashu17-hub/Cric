@@ -2,17 +2,17 @@
 
 // 1. Initial State Data (Mock Data for instant preview)
 const defaultTeams = [
-  { id: "team-1", name: "Palamaner", abbv: "BCB", color: "#3b82f6" },
-  { id: "team-2", name: "Chittoor", abbv: "MMV", color: "#ef4444" },
-  { id: "team-3", name: "Tirupati", abbv: "CST", color: "#f59e0b" },
-  { id: "team-4", name: "Punganur", abbv: "DDY", color: "#10b981" }
+  { id: "team-1", name: "Palamaner", abbv: "", color: "#3b82f6" },
+  { id: "team-2", name: "Chittoor", abbv: "", color: "#ef4444" },
+  { id: "team-3", name: "Tirupati", abbv: "", color: "#f59e0b" },
+  { id: "team-4", name: "Punganur", abbv: "", color: "#10b981" }
 ];
 
 const defaultPlayers = [
   {
     id: "player-1",
     name: "Virat Kohli",
-    age: 32,
+    age: 37,
     teamId: "team-1",
     role: "Batsman",
     jerseyNum: 18,
@@ -119,6 +119,274 @@ function saveState() {
   localStorage.setItem("clm_players", JSON.stringify(state.players));
   localStorage.setItem("clm_matches", JSON.stringify(state.matches));
   renderApp();
+  syncPushState();
+}
+
+// Cloud Sync State Manager
+function updateSyncIndicator(status) {
+  const dot = document.getElementById("sidebar-sync-dot");
+  const badge = document.getElementById("sync-status-badge");
+  
+  if (!dot) return;
+  
+  // Clear status classes
+  dot.className = "sync-dot";
+  
+  if (status === "offline") {
+    dot.classList.add("status-offline");
+    if (badge) {
+      badge.textContent = "Offline (Local)";
+      badge.className = "badge btn-secondary";
+    }
+  } else if (status === "syncing") {
+    dot.classList.add("status-syncing");
+    if (badge) {
+      badge.textContent = "Syncing...";
+      badge.className = "badge badge-amber";
+    }
+  } else if (status === "synced") {
+    dot.classList.add("status-synced");
+    if (badge) {
+      badge.textContent = "Synced";
+      badge.className = "badge badge-emerald";
+    }
+  } else if (status === "error") {
+    dot.classList.add("status-error");
+    if (badge) {
+      badge.textContent = "Sync Error";
+      badge.className = "badge btn-danger";
+    }
+  }
+}
+
+async function syncPushState() {
+  const syncKey = localStorage.getItem("clm_sync_key");
+  if (!syncKey) {
+    updateSyncIndicator("offline");
+    return;
+  }
+  
+  updateSyncIndicator("syncing");
+  try {
+    const payload = {
+      teams: state.teams,
+      players: state.players,
+      matches: state.matches,
+      updatedAt: Date.now()
+    };
+    
+    const response = await fetch(`https://jsonblob.com/api/jsonBlob/${syncKey}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+      updateSyncIndicator("synced");
+    } else {
+      updateSyncIndicator("error");
+    }
+  } catch (error) {
+    console.error("Sync error:", error);
+    updateSyncIndicator("error");
+  }
+}
+
+async function syncPullState() {
+  const syncKey = localStorage.getItem("clm_sync_key");
+  if (!syncKey) return false;
+  
+  updateSyncIndicator("syncing");
+  try {
+    const response = await fetch(`https://jsonblob.com/api/jsonBlob/${syncKey}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.teams && data.players && data.matches) {
+        state.teams = data.teams;
+        state.players = data.players;
+        state.matches = data.matches;
+        
+        localStorage.setItem("clm_teams", JSON.stringify(state.teams));
+        localStorage.setItem("clm_players", JSON.stringify(state.players));
+        localStorage.setItem("clm_matches", JSON.stringify(state.matches));
+        
+        updateSyncIndicator("synced");
+        return true;
+      }
+    }
+    updateSyncIndicator("error");
+    return false;
+  } catch (error) {
+    console.error("Pull state error:", error);
+    updateSyncIndicator("error");
+    return false;
+  }
+}
+
+async function enableCloudSync() {
+  updateSyncIndicator("syncing");
+  try {
+    const payload = {
+      teams: state.teams,
+      players: state.players,
+      matches: state.matches,
+      updatedAt: Date.now()
+    };
+    
+    const response = await fetch("https://jsonblob.com/api/jsonBlob", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+      const location = response.headers.get("Location");
+      if (location) {
+        const syncKey = location.substring(location.lastIndexOf("/") + 1);
+        localStorage.setItem("clm_sync_key", syncKey);
+        updateSyncIndicator("synced");
+        showToast("Cloud sync enabled successfully!");
+        renderSyncSettings();
+      } else {
+        updateSyncIndicator("error");
+        showToast("Failed to enable sync: Location header missing", "error");
+      }
+    } else {
+      updateSyncIndicator("error");
+      showToast("Failed to enable sync on server", "error");
+    }
+  } catch (error) {
+    console.error("Enable sync error:", error);
+    updateSyncIndicator("error");
+    showToast("Network error trying to enable sync", "error");
+  }
+}
+
+async function joinCloudSync(syncKey) {
+  if (!syncKey || syncKey.trim().length === 0) {
+    showToast("Please enter a valid Sync Code", "error");
+    return;
+  }
+  
+  updateSyncIndicator("syncing");
+  try {
+    const response = await fetch(`https://jsonblob.com/api/jsonBlob/${syncKey.trim()}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.teams && data.players && data.matches) {
+        state.teams = data.teams;
+        state.players = data.players;
+        state.matches = data.matches;
+        
+        localStorage.setItem("clm_sync_key", syncKey.trim());
+        localStorage.setItem("clm_teams", JSON.stringify(state.teams));
+        localStorage.setItem("clm_players", JSON.stringify(state.players));
+        localStorage.setItem("clm_matches", JSON.stringify(state.matches));
+        
+        updateSyncIndicator("synced");
+        showToast("Successfully joined sync session!");
+        renderApp();
+        renderSyncSettings();
+      } else {
+        updateSyncIndicator("error");
+        showToast("Invalid sync code or sync data is corrupted", "error");
+      }
+    } else {
+      updateSyncIndicator("error");
+      showToast("Sync Code not found on server", "error");
+    }
+  } catch (error) {
+    console.error("Join sync error:", error);
+    updateSyncIndicator("error");
+    showToast("Network error trying to join sync session", "error");
+  }
+}
+
+function disconnectCloudSync() {
+  if (confirm("Are you sure you want to disconnect? Your data will remain local to this device, but will stop syncing with other devices.")) {
+    localStorage.removeItem("clm_sync_key");
+    updateSyncIndicator("offline");
+    showToast("Cloud sync disconnected.", "info");
+    renderSyncSettings();
+  }
+}
+
+function renderSyncSettings() {
+  const syncKey = localStorage.getItem("clm_sync_key");
+  const inactivePane = document.getElementById("sync-inactive-pane");
+  const activePane = document.getElementById("sync-active-pane");
+  const displayCode = document.getElementById("display-sync-code");
+  
+  if (syncKey) {
+    if (inactivePane) inactivePane.classList.add("hidden");
+    if (activePane) activePane.classList.remove("hidden");
+    if (displayCode) displayCode.textContent = syncKey;
+    updateSyncIndicator("synced");
+  } else {
+    if (inactivePane) inactivePane.classList.remove("hidden");
+    if (activePane) activePane.classList.add("hidden");
+    updateSyncIndicator("offline");
+  }
+}
+
+function setupSyncEventListeners() {
+  const btnEnable = document.getElementById("btn-enable-sync");
+  const btnJoin = document.getElementById("btn-join-sync");
+  const btnDisconnect = document.getElementById("btn-disconnect-sync");
+  const btnSyncNow = document.getElementById("btn-sync-now");
+  const btnCopy = document.getElementById("btn-copy-sync-code");
+  
+  if (btnEnable) {
+    btnEnable.addEventListener("click", enableCloudSync);
+  }
+  
+  if (btnJoin) {
+    btnJoin.addEventListener("click", () => {
+      const input = document.getElementById("sync-code-input");
+      if (input && input.value) {
+        if (confirm("Warning: Joining a sync session will overwrite your current local teams and players data with the cloud data. Proceed?")) {
+          joinCloudSync(input.value);
+        }
+      } else {
+        showToast("Please enter a Sync Code", "error");
+      }
+    });
+  }
+  
+  if (btnDisconnect) {
+    btnDisconnect.addEventListener("click", disconnectCloudSync);
+  }
+  
+  if (btnSyncNow) {
+    btnSyncNow.addEventListener("click", async () => {
+      showToast("Syncing latest data...", "info");
+      const pulled = await syncPullState();
+      if (pulled) {
+        renderApp();
+        showToast("Data pulled and updated from cloud!");
+      } else {
+        showToast("Could not retrieve latest data. Pushing local state to cloud...", "info");
+        await syncPushState();
+      }
+    });
+  }
+  
+  if (btnCopy) {
+    btnCopy.addEventListener("click", () => {
+      const syncKey = localStorage.getItem("clm_sync_key");
+      if (syncKey) {
+        navigator.clipboard.writeText(syncKey)
+          .then(() => showToast("Sync Code copied to clipboard!"))
+          .catch(() => showToast("Failed to copy code", "error"));
+      }
+    });
+  }
 }
 
 // 3. UI Helpers: Toasts
@@ -165,7 +433,8 @@ const viewTitles = {
   dashboard: { title: "Dashboard Overview", subtitle: "Real-time league standings, recent match results, and active teams." },
   players: { title: "Player Directory", subtitle: "Search, filter, and review player statistics and profiles." },
   teams: { title: "Team Rosters", subtitle: "Manage league franchises and evaluate team composition." },
-  fixtures: { title: "Match Center", subtitle: "Record scores and review league match results." }
+  fixtures: { title: "Match Center", subtitle: "Record scores and review league match results." },
+  sync: { title: "Cloud Synchronization", subtitle: "Synchronize teams, players, and match records across multiple devices." }
 };
 
 document.querySelectorAll(".nav-menu .nav-item").forEach(item => {
@@ -188,6 +457,7 @@ document.querySelectorAll(".nav-menu .nav-item").forEach(item => {
     // Render specific view assets
     if (view === "players") renderPlayersList();
     if (view === "teams") renderTeamsList();
+    if (view === "sync") renderSyncSettings();
   });
 });
 
@@ -258,7 +528,8 @@ function populateTeamDropdowns() {
   filterTeamSelect.innerHTML = `<option value="all">All Teams</option>`;
 
   state.teams.forEach(team => {
-    const opt = `<option value="${team.id}">${team.name} (${team.abbv})</option>`;
+    const label = team.abbv ? `${team.name} (${team.abbv})` : team.name;
+    const opt = `<option value="${team.id}">${label}</option>`;
     playerTeamSelect.innerHTML += opt;
     matchTeam1Select.innerHTML += opt;
     matchTeam2Select.innerHTML += opt;
@@ -561,7 +832,7 @@ function renderTeamsList() {
       <div class="team-card">
         <div class="team-card-header">
           <span class="team-card-color" style="color: ${team.color}; background-color: ${team.color}"></span>
-          <h3 class="team-card-name">${team.name} (${team.abbv})</h3>
+          <h3 class="team-card-name">${team.abbv ? `${team.name} (${team.abbv})` : team.name}</h3>
         </div>
         
         <div class="team-stats-flex">
@@ -923,8 +1194,24 @@ function renderApp() {
 }
 
 // Kickstart
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  // If sync key exists, pull first
+  const syncKey = localStorage.getItem("clm_sync_key");
+  if (syncKey) {
+    updateSyncIndicator("syncing");
+    const success = await syncPullState();
+    if (success) {
+      showToast("Synchronized data loaded from cloud.");
+    } else {
+      showToast("Offline mode: loaded cached local data.", "info");
+    }
+  }
+  
   renderApp();
+  
+  // Setup sync settings view event listeners
+  setupSyncEventListeners();
+  renderSyncSettings();
 });
 
 // Expose functions globally for dynamic inline HTML onclick events
