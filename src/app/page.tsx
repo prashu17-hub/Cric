@@ -1,6 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  initDatabase,
+  getLeagueData,
+  savePlayerAction,
+  deletePlayerAction,
+  createTeamAction,
+  recordMatchAction,
+  clearMatchesAction
+} from "./actions";
 import { 
   Trophy, 
   LayoutDashboard, 
@@ -17,11 +26,11 @@ import {
   Trash2, 
   Edit3, 
   Eye, 
-  Copy, 
-  Link, 
-  Unlink, 
-  CloudLightning, 
-  CloudUpload, 
+  Copy,
+  Database,
+  Wifi,
+  WifiOff, 
+
   CheckCircle2, 
   X,
   Plus,
@@ -257,10 +266,10 @@ export default function Home() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   
-  const [activeView, setActiveView] = useState<"dashboard" | "players" | "teams" | "fixtures" | "sync">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | "players" | "teams" | "fixtures" | "database">("dashboard");
   
-  const [syncKey, setSyncKey] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<"offline" | "syncing" | "synced" | "error">("offline");
+  const [dbStatus, setDbStatus] = useState<"connecting" | "connected" | "error" | "no-config">("connecting");
+  const [dbError, setDbError] = useState<string | null>(null);
 
   // --- Filtering & Search ---
   const [playerSearch, setPlayerSearch] = useState("");
@@ -280,18 +289,18 @@ export default function Home() {
   // Player Form
   const [playerForm, setPlayerForm] = useState({
     name: "",
-    age: 25,
+    age: "" as any,
     teamId: "",
-    role: "Batsman" as Player["role"],
-    jerseyNum: 7,
-    battingStyle: "Right-Handed",
-    bowlingStyle: "None",
-    matches: 0,
-    runs: 0,
-    highScore: 0,
-    wickets: 0,
-    bestBowlingRuns: 0,
-    bestBowlingWkts: 0,
+    role: "" as any,
+    jerseyNum: "" as any,
+    battingStyle: "",
+    bowlingStyle: "",
+    matches: "" as any,
+    runs: "" as any,
+    highScore: "" as any,
+    wickets: "" as any,
+    bestBowlingRuns: "" as any,
+    bestBowlingWkts: "" as any,
     jerseyColor: "#3b82f6"
   });
 
@@ -315,187 +324,73 @@ export default function Home() {
     notes: ""
   });
 
-  // Sync Input Code
-  const [syncInputCode, setSyncInputCode] = useState("");
-
-  // --- 1. Mount Effect: Load LocalStorage ---
-  useEffect(() => {
-    setMounted(true);
-    const loadedTeams = localStorage.getItem("clm_teams");
-    const loadedPlayers = localStorage.getItem("clm_players");
-    const loadedMatches = localStorage.getItem("clm_matches");
-    const loadedSyncKey = localStorage.getItem("clm_sync_key");
-
-    const initialTeams = loadedTeams ? JSON.parse(loadedTeams) : defaultTeams;
-    const initialPlayers = loadedPlayers ? JSON.parse(loadedPlayers) : defaultPlayers;
-    const initialMatches = loadedMatches ? JSON.parse(loadedMatches) : defaultMatches;
-
-    setTeams(initialTeams);
-    setPlayers(initialPlayers);
-    setMatches(initialMatches);
-
-    if (loadedSyncKey) {
-      setSyncKey(loadedSyncKey);
-      setSyncStatus("syncing");
-      // Asynchronously fetch latest data from cloud
-      pullStateFromCloud(loadedSyncKey, initialTeams, initialPlayers, initialMatches);
+  // --- 1. Mount Effect: Initialize Database & Load Data ---
+  const refreshData = useCallback(async () => {
+    try {
+      const result = await getLeagueData();
+      if (result.success && result.data) {
+        setTeams(result.data.teams);
+        setPlayers(result.data.players);
+        setMatches(result.data.matches);
+        setDbStatus("connected");
+        setDbError(null);
+      } else {
+        // If DB returns no data but no error, use defaults for first launch
+        if (result.error?.includes("DATABASE_URL")) {
+          setDbStatus("no-config");
+          setDbError("DATABASE_URL is not configured");
+          // Fall back to default demo data
+          setTeams(defaultTeams);
+          setPlayers(defaultPlayers);
+          setMatches(defaultMatches);
+        } else {
+          setDbStatus("error");
+          setDbError(result.error || "Unknown error");
+        }
+      }
+    } catch (err) {
+      setDbStatus("error");
+      setDbError(String(err));
+      // Fall back to default demo data on error
+      setTeams(defaultTeams);
+      setPlayers(defaultPlayers);
+      setMatches(defaultMatches);
     }
   }, []);
 
-  // --- 2. Synchronize LocalState to LocalStorage & Cloud Sync ---
-  const saveState = (updatedTeams: Team[], updatedPlayers: Player[], updatedMatches: Match[]) => {
-    setTeams(updatedTeams);
-    setPlayers(updatedPlayers);
-    setMatches(updatedMatches);
-
-    localStorage.setItem("clm_teams", JSON.stringify(updatedTeams));
-    localStorage.setItem("clm_players", JSON.stringify(updatedPlayers));
-    localStorage.setItem("clm_matches", JSON.stringify(updatedMatches));
-
-    // If Cloud Sync is active, trigger an async push
-    const activeSyncKey = localStorage.getItem("clm_sync_key");
-    if (activeSyncKey) {
-      pushStateToCloud(activeSyncKey, updatedTeams, updatedPlayers, updatedMatches);
-    }
-  };
-
-  // --- 3. Cloud Sync HTTP Operations ---
-  const pushStateToCloud = async (key: string, t: Team[], p: Player[], m: Match[]) => {
-    setSyncStatus("syncing");
-    try {
-      const payload = { teams: t, players: p, matches: m, updatedAt: Date.now() };
-      const response = await fetch(`https://jsonblob.com/api/jsonBlob/${key}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-      if (response.ok) {
-        setSyncStatus("synced");
-      } else {
-        setSyncStatus("error");
-      }
-    } catch (e) {
-      console.error(e);
-      setSyncStatus("error");
-    }
-  };
-
-  const pullStateFromCloud = async (key: string, currentTeams = teams, currentPlayers = players, currentMatches = matches) => {
-    setSyncStatus("syncing");
-    try {
-      const response = await fetch(`https://jsonblob.com/api/jsonBlob/${key}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.teams && data.players && data.matches) {
-          setTeams(data.teams);
-          setPlayers(data.players);
-          setMatches(data.matches);
-          localStorage.setItem("clm_teams", JSON.stringify(data.teams));
-          localStorage.setItem("clm_players", JSON.stringify(data.players));
-          localStorage.setItem("clm_matches", JSON.stringify(data.matches));
-          setSyncStatus("synced");
-          return true;
+  useEffect(() => {
+    const bootstrap = async () => {
+      setMounted(true);
+      setDbStatus("connecting");
+      try {
+        const initResult = await initDatabase();
+        if (!initResult.success) {
+          if (initResult.error?.includes("DATABASE_URL")) {
+            setDbStatus("no-config");
+            setDbError("DATABASE_URL environment variable is not set. Using demo data.");
+            setTeams(defaultTeams);
+            setPlayers(defaultPlayers);
+            setMatches(defaultMatches);
+            return;
+          }
+          setDbStatus("error");
+          setDbError(initResult.error || "Failed to initialize database");
+          setTeams(defaultTeams);
+          setPlayers(defaultPlayers);
+          setMatches(defaultMatches);
+          return;
         }
+        await refreshData();
+      } catch (err) {
+        setDbStatus("error");
+        setDbError(String(err));
+        setTeams(defaultTeams);
+        setPlayers(defaultPlayers);
+        setMatches(defaultMatches);
       }
-      setSyncStatus("error");
-      return false;
-    } catch (e) {
-      console.error(e);
-      setSyncStatus("error");
-      return false;
-    }
-  };
-
-  const handleEnableSync = async () => {
-    setSyncStatus("syncing");
-    try {
-      const payload = { teams, players, matches, updatedAt: Date.now() };
-      const response = await fetch("https://jsonblob.com/api/jsonBlob", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-      if (response.ok) {
-        const location = response.headers.get("Location");
-        if (location) {
-          const code = location.substring(location.lastIndexOf("/") + 1);
-          setSyncKey(code);
-          localStorage.setItem("clm_sync_key", code);
-          setSyncStatus("synced");
-          showToast("Cloud sync enabled successfully!");
-        } else {
-          setSyncStatus("error");
-          showToast("Failed to enable sync: Location header missing", "error");
-        }
-      } else {
-        setSyncStatus("error");
-        showToast("Failed to enable sync on server", "error");
-      }
-    } catch (e) {
-      console.error(e);
-      setSyncStatus("error");
-      showToast("Network error trying to enable sync", "error");
-    }
-  };
-
-  const handleJoinSync = async (codeToJoin: string) => {
-    if (!codeToJoin || codeToJoin.trim().length === 0) {
-      showToast("Please enter a valid Sync Code", "error");
-      return;
-    }
-    const cleanCode = codeToJoin.trim();
-    setSyncStatus("syncing");
-    try {
-      const response = await fetch(`https://jsonblob.com/api/jsonBlob/${cleanCode}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.teams && data.players && data.matches) {
-          setSyncKey(cleanCode);
-          localStorage.setItem("clm_sync_key", cleanCode);
-          saveState(data.teams, data.players, data.matches);
-          setSyncStatus("synced");
-          showToast("Successfully joined sync session!");
-        } else {
-          setSyncStatus("error");
-          showToast("Invalid sync code or sync data is corrupted", "error");
-        }
-      } else {
-        setSyncStatus("error");
-        showToast("Sync Code not found on server", "error");
-      }
-    } catch (e) {
-      console.error(e);
-      setSyncStatus("error");
-      showToast("Network error trying to join sync session", "error");
-    }
-  };
-
-  const handleDisconnectSync = () => {
-    if (window.confirm("Are you sure you want to disconnect? Your data will remain local to this device, but will stop syncing with other devices.")) {
-      localStorage.removeItem("clm_sync_key");
-      setSyncKey(null);
-      setSyncStatus("offline");
-      showToast("Cloud sync disconnected.", "info");
-    }
-  };
-
-  const handleSyncNow = async () => {
-    if (!syncKey) return;
-    showToast("Syncing latest data...", "info");
-    const success = await pullStateFromCloud(syncKey);
-    if (success) {
-      showToast("Data pulled and updated from cloud!");
-    } else {
-      showToast("Could not retrieve latest data. Pushing local state to cloud...", "info");
-      await pushStateToCloud(syncKey, teams, players, matches);
-    }
-  };
+    };
+    bootstrap();
+  }, [refreshData]);
 
   // --- 4. Standings & Calculations ---
   // Helper to convert Overs Decimal to fractional overs (e.g. 19.2 -> 19 + 2/6 = 19.33)
@@ -603,79 +498,59 @@ export default function Home() {
     });
   }, [players, playerSearch, filterTeam, filterRole]);
 
-  // --- 5. Form Actions ---
-  const handlePlayerSubmit = (e: React.FormEvent) => {
+  // --- 5. Form Actions (using Server Actions) ---
+  const handlePlayerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const isEdit = editingPlayerId !== null;
 
-    if (isEdit) {
-      const idx = players.findIndex(p => p.id === editingPlayerId);
-      if (idx > -1) {
-        const updated = [...players];
-        updated[idx] = {
-          ...players[idx],
-          ...playerForm,
-          age: Number(playerForm.age),
-          jerseyNum: Number(playerForm.jerseyNum),
-          matches: Number(playerForm.matches),
-          runs: Number(playerForm.runs),
-          highScore: Number(playerForm.highScore),
-          wickets: Number(playerForm.wickets),
-          bestBowlingRuns: Number(playerForm.bestBowlingRuns),
-          bestBowlingWkts: Number(playerForm.bestBowlingWkts),
-        };
-        saveState(teams, updated, matches);
-        showToast(`Updated player profile for ${playerForm.name}`);
-      }
+    const payload = {
+      name: playerForm.name,
+      age: Number(playerForm.age) || 0,
+      teamId: playerForm.teamId,
+      role: playerForm.role,
+      jerseyNum: Number(playerForm.jerseyNum) || 0,
+      battingStyle: playerForm.battingStyle,
+      bowlingStyle: playerForm.bowlingStyle,
+      matches: Number(playerForm.matches) || 0,
+      runs: Number(playerForm.runs) || 0,
+      highScore: Number(playerForm.highScore) || 0,
+      wickets: Number(playerForm.wickets) || 0,
+      bestBowlingRuns: Number(playerForm.bestBowlingRuns) || 0,
+      bestBowlingWkts: Number(playerForm.bestBowlingWkts) || 0,
+      jerseyColor: playerForm.jerseyColor || "#3b82f6",
+    };
+
+    const result = await savePlayerAction(payload, isEdit ? editingPlayerId : null);
+    if (result.success) {
+      showToast(isEdit ? `Updated player profile for ${playerForm.name}` : `Registered player ${playerForm.name} successfully!`);
+      await refreshData();
     } else {
-      const newPlayer: Player = {
-        ...playerForm,
-        id: "player-" + Date.now(),
-        age: Number(playerForm.age),
-        jerseyNum: Number(playerForm.jerseyNum),
-        matches: Number(playerForm.matches),
-        runs: Number(playerForm.runs),
-        highScore: Number(playerForm.highScore),
-        wickets: Number(playerForm.wickets),
-        bestBowlingRuns: Number(playerForm.bestBowlingRuns),
-        bestBowlingWkts: Number(playerForm.bestBowlingWkts),
-      };
-      saveState(teams, [...players, newPlayer], matches);
-      showToast(`Registered player ${playerForm.name} successfully!`);
+      showToast(result.error || "Failed to save player", "error");
     }
 
     setPlayerModalOpen(false);
     setEditingPlayerId(null);
   };
 
-  const handleTeamSubmit = (e: React.FormEvent) => {
+  const handleTeamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const name = teamForm.name.trim();
-    const abbv = teamForm.abbv.trim().toUpperCase();
+    const result = await createTeamAction({
+      name: teamForm.name,
+      abbv: teamForm.abbv,
+      color: teamForm.color,
+    });
 
-    if (teams.some(t => t.name.toLowerCase() === name.toLowerCase())) {
-      showToast("A team with this name already exists!", "error");
-      return;
+    if (result.success) {
+      showToast(`Created team ${teamForm.name.trim()} successfully!`);
+      await refreshData();
+      setTeamModalOpen(false);
+      setTeamForm({ name: "", abbv: "", color: "#06b6d4" });
+    } else {
+      showToast(result.error || "Failed to create team", "error");
     }
-    if (teams.some(t => t.abbv === abbv)) {
-      showToast("This abbreviation is already taken!", "error");
-      return;
-    }
-
-    const newTeam: Team = {
-      id: "team-" + Date.now(),
-      name,
-      abbv,
-      color: teamForm.color
-    };
-
-    saveState([...teams, newTeam], players, matches);
-    showToast(`Created team ${name} successfully!`);
-    setTeamModalOpen(false);
-    setTeamForm({ name: "", abbv: "", color: "#06b6d4" });
   };
 
-  const handleMatchSubmit = (e: React.FormEvent) => {
+  const handleMatchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const t1 = matchForm.team1Id;
     const t2 = matchForm.team2Id;
@@ -698,8 +573,7 @@ export default function Home() {
       return;
     }
 
-    const newMatch: Match = {
-      id: "match-" + Date.now(),
+    const result = await recordMatchAction({
       team1Id: t1,
       team2Id: t2,
       runs1: parseInt(matchForm.runs1),
@@ -708,39 +582,52 @@ export default function Home() {
       runs2: parseInt(matchForm.runs2),
       wickets2: parseInt(matchForm.wickets2),
       overs2: ov2,
-      notes: matchForm.notes || undefined
-    };
-
-    saveState(teams, players, [...matches, newMatch]);
-    showToast("Match recorded successfully!");
-    setMatchForm({
-      team1Id: "",
-      team2Id: "",
-      runs1: "",
-      wickets1: "",
-      overs1: "",
-      runs2: "",
-      wickets2: "",
-      overs2: "",
-      notes: ""
+      notes: matchForm.notes || undefined,
     });
-  };
 
-  const handleResetMatches = () => {
-    if (window.confirm("Are you sure you want to clear all match history? Points table will reset.")) {
-      saveState(teams, players, []);
-      showToast("Match history cleared.", "info");
+    if (result.success) {
+      showToast("Match recorded successfully!");
+      await refreshData();
+      setMatchForm({
+        team1Id: "",
+        team2Id: "",
+        runs1: "",
+        wickets1: "",
+        overs1: "",
+        runs2: "",
+        wickets2: "",
+        overs2: "",
+        notes: ""
+      });
+    } else {
+      showToast(result.error || "Failed to record match", "error");
     }
   };
 
-  const handleDeletePlayer = (id: string) => {
+  const handleResetMatches = async () => {
+    if (window.confirm("Are you sure you want to clear all match history? Points table will reset.")) {
+      const result = await clearMatchesAction();
+      if (result.success) {
+        showToast("Match history cleared.", "info");
+        await refreshData();
+      } else {
+        showToast(result.error || "Failed to clear matches", "error");
+      }
+    }
+  };
+
+  const handleDeletePlayer = async (id: string) => {
     const player = players.find(p => p.id === id);
     if (!player) return;
     if (window.confirm(`Are you sure you want to remove ${player.name} from the league database?`)) {
-      const updated = players.filter(p => p.id !== id);
-      saveState(teams, updated, matches);
-      setPlayerDetailModalOpen(false);
-      showToast(`Removed player ${player.name} from directory.`, "info");
+      const result = await deletePlayerAction(id);
+      if (result.success) {
+        showToast(`Removed player ${player.name} from directory.`, "info");
+        setPlayerDetailModalOpen(false);
+        await refreshData();
+      } else {
+        showToast(result.error || "Failed to delete player", "error");
+      }
     }
   };
 
@@ -749,18 +636,18 @@ export default function Home() {
     setEditingPlayerId(null);
     setPlayerForm({
       name: "",
-      age: 25,
-      teamId: teams[0]?.id || "",
-      role: "Batsman",
-      jerseyNum: 7,
-      battingStyle: "Right-Handed",
-      bowlingStyle: "None",
-      matches: 0,
-      runs: 0,
-      highScore: 0,
-      wickets: 0,
-      bestBowlingRuns: 0,
-      bestBowlingWkts: 0,
+      age: "" as any,
+      teamId: "",
+      role: "" as any,
+      jerseyNum: "" as any,
+      battingStyle: "",
+      bowlingStyle: "",
+      matches: "" as any,
+      runs: "" as any,
+      highScore: "" as any,
+      wickets: "" as any,
+      bestBowlingRuns: "" as any,
+      bestBowlingWkts: "" as any,
       jerseyColor: "#3b82f6"
     });
     setPlayerModalOpen(true);
@@ -840,7 +727,7 @@ export default function Home() {
     players: { title: "Player Directory", subtitle: "Search, filter, and review player statistics and profiles." },
     teams: { title: "Team Rosters", subtitle: "Manage league franchises and evaluate team composition." },
     fixtures: { title: "Match Center", subtitle: "Record scores and review league match results." },
-    sync: { title: "Cloud Synchronization", subtitle: "Synchronize teams, players, and match records across multiple devices." }
+    database: { title: "Database Connection", subtitle: "View PostgreSQL database status, connection health, and data statistics." }
   };
 
   const getRoleIcon = (role: Player["role"]) => {
@@ -891,11 +778,11 @@ export default function Home() {
               <span>Match Center</span>
             </a>
           </li>
-          <li className={`nav-item ${activeView === "sync" ? "active" : ""}`} onClick={() => setActiveView("sync")}>
+          <li className={`nav-item ${activeView === "database" ? "active" : ""}`} onClick={() => setActiveView("database")}>
             <a href="#">
-              <RefreshCw />
-              <span>Cloud Sync</span>
-              <span className={`sync-dot status-${syncStatus}`} id="sidebar-sync-dot"></span>
+              <Database />
+              <span>Database</span>
+              <span className={`sync-dot status-${dbStatus === "connected" ? "synced" : dbStatus === "connecting" ? "syncing" : "error"}`} id="sidebar-db-dot"></span>
             </a>
           </li>
         </nav>
@@ -1431,124 +1318,91 @@ export default function Home() {
           </section>
         )}
 
-        {/* --- VIEW 5: CLOUD SYNC VIEW --- */}
-        {activeView === "sync" && (
+        {/* --- VIEW 5: DATABASE CONNECTION VIEW --- */}
+        {activeView === "database" && (
           <section className="view-pane active">
             <div className="glass-card" style={{ maxWidth: 600, margin: "2rem auto" }}>
               <div className="card-header">
                 <h3>
-                  <RefreshCw style={{ color: "var(--accent-cyan)" }} />
-                  Sync Across Devices
+                  <Database style={{ color: "var(--accent-cyan)" }} />
+                  Database Connection
                 </h3>
               </div>
               
               <div className="sync-card-body" style={{ padding: "1.5rem" }}>
                 <p style={{ marginBottom: "1.5rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-                  By default, all team rosters and player registrations are stored locally on this device. 
-                  Enable Cloud Sync to backup your data and synchronize it across multiple devices and users (phones, tablets, PCs).
+                  All data is stored in a PostgreSQL database. Changes made on any device are automatically reflected everywhere.
+                  All database operations run securely on the server — no credentials are exposed to the client.
                 </p>
 
-                <div id="sync-setup-section">
-                  {/* If sync is NOT active */}
-                  {!syncKey && (
-                    <div id="sync-inactive-pane">
-                      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                        <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", padding: "1.25rem", borderRadius: "var(--radius-md)" }}>
-                          <h4 style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--text-primary)" }}>
-                            <CloudLightning style={{ color: "var(--accent-cyan)", width: 18, height: 18 }} />
-                            Option A: Create a New Sync Session
-                          </h4>
-                          <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
-                            Start a new database cloud sync. This will upload your current local data to the cloud.
-                          </p>
-                          <button className="btn btn-primary" onClick={handleEnableSync}>
-                            <CloudUpload style={{ width: 18, height: 18 }} />
-                            <span>Enable Cloud Sync</span>
-                          </button>
-                        </div>
-
-                        <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", padding: "1.25rem", borderRadius: "var(--radius-md)" }}>
-                          <h4 style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--text-primary)" }}>
-                            <Link style={{ color: "var(--accent-emerald)", width: 18, height: 18 }} />
-                            Option B: Join Existing Sync Session
-                          </h4>
-                          <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
-                            If you already enabled sync on another device, enter the Sync Code here to sync this device.
-                          </p>
-                          <div style={{ display: "flex", gap: "0.5rem" }}>
-                            <input 
-                              type="text" 
-                              className="form-control" 
-                              placeholder="Paste Sync Code here..." 
-                              value={syncInputCode}
-                              onChange={(e) => setSyncInputCode(e.target.value)}
-                              style={{ fontFamily: "monospace", letterSpacing: "0.5px" }}
-                            />
-                            <button className="btn btn-emerald" onClick={() => {
-                              if (window.confirm("Warning: Joining a sync session will overwrite your current local teams and players data with the cloud data. Proceed?")) {
-                                handleJoinSync(syncInputCode);
-                              }
-                            }}>
-                              <span>Connect</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                {/* Connection Status */}
+                <div style={{ background: dbStatus === "connected" ? "rgba(16, 185, 129, 0.05)" : dbStatus === "connecting" ? "rgba(245, 158, 11, 0.05)" : "rgba(239, 68, 68, 0.05)", border: `1px solid ${dbStatus === "connected" ? "rgba(16, 185, 129, 0.15)" : dbStatus === "connecting" ? "rgba(245, 158, 11, 0.15)" : "rgba(239, 68, 68, 0.15)"}`, padding: "1.25rem", borderRadius: "var(--radius-md)", marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: "1rem", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      {dbStatus === "connected" ? (
+                        <Wifi style={{ color: "var(--accent-emerald)" }} />
+                      ) : (
+                        <WifiOff style={{ color: dbStatus === "connecting" ? "var(--accent-amber)" : "var(--accent-rose)" }} />
+                      )}
+                      <h4 style={{ color: "var(--text-primary)", margin: 0 }}>
+                        {dbStatus === "connected" && "Database Connected"}
+                        {dbStatus === "connecting" && "Connecting to Database..."}
+                        {dbStatus === "error" && "Database Connection Error"}
+                        {dbStatus === "no-config" && "Database Not Configured"}
+                      </h4>
                     </div>
-                  )}
+                    <span className={`badge ${dbStatus === "connected" ? "badge-emerald" : dbStatus === "connecting" ? "badge-amber" : "badge-rose"}`}>
+                      {dbStatus === "connected" ? "Live" : dbStatus === "connecting" ? "Connecting" : dbStatus === "no-config" ? "Demo Mode" : "Error"}
+                    </span>
+                  </div>
+                  
+                  <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+                    {dbStatus === "connected" && "Your PostgreSQL database is online. All changes are persisted automatically across all devices."}
+                    {dbStatus === "connecting" && "Establishing connection to your PostgreSQL database..."}
+                    {dbStatus === "error" && (dbError || "Could not connect to the database. Please check your DATABASE_URL configuration.")}
+                    {dbStatus === "no-config" && "No DATABASE_URL environment variable found. Running with demo data. Set DATABASE_URL in your .env.local to connect to PostgreSQL."}
+                  </p>
 
-                  {/* If sync IS active */}
-                  {syncKey && (
-                    <div id="sync-active-pane" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                      <div style={{ background: "rgba(16, 185, 129, 0.05)", border: "1px solid rgba(16, 185, 129, 0.15)", padding: "1.25rem", borderRadius: "var(--radius-md)" }}>
-                        <div style={{ display: "flex", alignItems: "center", marginBottom: "1rem", justifyContent: "space-between" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <CheckCircle style={{ color: "var(--accent-emerald)" }} />
-                            <h4 style={{ color: "var(--text-primary)", margin: 0 }}>Cloud Sync is Active</h4>
-                          </div>
-                          <span className={`badge ${syncStatus === "synced" ? "badge-emerald" : "badge-amber"}`}>
-                            {syncStatus === "synced" ? "Synced" : syncStatus === "syncing" ? "Syncing..." : "Error"}
-                          </span>
-                        </div>
-                        
-                        <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "1.25rem" }}>
-                          Your data is safely backed up in the cloud and auto-saves on every registration or change.
-                        </p>
-
-                        <div style={{ marginBottom: "1.25rem" }}>
-                          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.5rem", letterSpacing: "0.5px" }}>
-                            Your Shared Sync Code
-                          </label>
-                          <div style={{ display: "flex", gap: "0.5rem", background: "rgba(0,0,0,0.2)", padding: "0.5rem", borderRadius: "var(--radius-sm)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                            <code style={{ flexGrow: 1, alignSelf: "center", fontFamily: "monospace", fontSize: "1.1rem", color: "var(--accent-cyan)", wordBreak: "break-all", padding: "0 0.5rem" }}>
-                              {syncKey}
-                            </code>
-                            <button className="btn btn-secondary" style={{ padding: "0.375rem 0.75rem", minWidth: "auto", fontSize: "0.875rem" }} onClick={() => {
-                              navigator.clipboard.writeText(syncKey)
-                                .then(() => showToast("Sync Code copied to clipboard!"))
-                                .catch(() => showToast("Failed to copy code", "error"));
-                            }}>
-                              <Copy style={{ width: 16, height: 16 }} />
-                              <span>Copy</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "1rem" }}>
-                          <button className="btn btn-secondary" style={{ fontSize: "0.875rem" }} onClick={handleSyncNow}>
-                            <RefreshCw style={{ width: 16, height: 16 }} />
-                            <span>Sync Now</span>
-                          </button>
-                          <button className="btn btn-danger" style={{ fontSize: "0.875rem" }} onClick={handleDisconnectSync}>
-                            <Unlink style={{ width: 16, height: 16 }} />
-                            <span>Disconnect Sync</span>
-                          </button>
-                        </div>
-                      </div>
+                  {dbError && dbStatus === "error" && (
+                    <div style={{ background: "rgba(239, 68, 68, 0.08)", padding: "0.75rem", borderRadius: "var(--radius-sm)", fontSize: "0.8rem", fontFamily: "monospace", color: "var(--accent-rose)", marginBottom: "1rem", wordBreak: "break-all" }}>
+                      {dbError}
                     </div>
                   )}
                 </div>
 
+                {/* Data Statistics */}
+                <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", padding: "1.25rem", borderRadius: "var(--radius-md)", marginBottom: "1.5rem" }}>
+                  <h4 style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--text-primary)" }}>
+                    <Info style={{ color: "var(--accent-cyan)", width: 18, height: 18 }} />
+                    Data Statistics
+                  </h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" }}>
+                    <div style={{ textAlign: "center", padding: "0.75rem", background: "rgba(6, 182, 212, 0.05)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(6, 182, 212, 0.1)" }}>
+                      <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--accent-cyan)" }}>{teams.length}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Teams</div>
+                    </div>
+                    <div style={{ textAlign: "center", padding: "0.75rem", background: "rgba(16, 185, 129, 0.05)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(16, 185, 129, 0.1)" }}>
+                      <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--accent-emerald)" }}>{players.length}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Players</div>
+                    </div>
+                    <div style={{ textAlign: "center", padding: "0.75rem", background: "rgba(245, 158, 11, 0.05)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(245, 158, 11, 0.1)" }}>
+                      <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--accent-amber)" }}>{matches.length}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Matches</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Refresh Button */}
+                <div style={{ display: "flex", gap: "1rem", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "1rem" }}>
+                  <button className="btn btn-secondary" style={{ fontSize: "0.875rem" }} onClick={async () => {
+                    showToast("Refreshing data from database...", "info");
+                    await refreshData();
+                    showToast("Data refreshed successfully!");
+                  }}>
+                    <RefreshCw style={{ width: 16, height: 16 }} />
+                    <span>Refresh Data</span>
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -1600,7 +1454,7 @@ export default function Home() {
                     min="15" 
                     max="50" 
                     value={playerForm.age}
-                    onChange={(e) => setPlayerForm({ ...playerForm, age: Number(e.target.value) })}
+                    onChange={(e) => setPlayerForm({ ...playerForm, age: e.target.value })}
                     required 
                   />
                 </div>
@@ -1643,7 +1497,7 @@ export default function Home() {
                     min="1" 
                     max="999" 
                     value={playerForm.jerseyNum}
-                    onChange={(e) => setPlayerForm({ ...playerForm, jerseyNum: Number(e.target.value) })}
+                    onChange={(e) => setPlayerForm({ ...playerForm, jerseyNum: e.target.value })}
                     required 
                   />
                 </div>
@@ -1656,6 +1510,7 @@ export default function Home() {
                     onChange={(e) => setPlayerForm({ ...playerForm, battingStyle: e.target.value })}
                     required
                   >
+                    <option value="" disabled>Select Batting Style</option>
                     <option value="Right-Handed">Right-Handed</option>
                     <option value="Left-Handed">Left-Handed</option>
                   </select>
@@ -1667,7 +1522,9 @@ export default function Home() {
                     className="form-control" 
                     value={playerForm.bowlingStyle}
                     onChange={(e) => setPlayerForm({ ...playerForm, bowlingStyle: e.target.value })}
+                    required
                   >
+                    <option value="" disabled>Select Bowling Style</option>
                     <option value="None">None / Does not bowl</option>
                     <option value="Right-Arm Fast">Right-Arm Fast</option>
                     <option value="Right-Arm Medium">Right-Arm Medium</option>
@@ -1689,7 +1546,7 @@ export default function Home() {
                     className="form-control" 
                     min="0" 
                     value={playerForm.matches}
-                    onChange={(e) => setPlayerForm({ ...playerForm, matches: Number(e.target.value) })}
+                    onChange={(e) => setPlayerForm({ ...playerForm, matches: e.target.value })}
                   />
                 </div>
 
@@ -1700,7 +1557,7 @@ export default function Home() {
                     className="form-control" 
                     min="0" 
                     value={playerForm.runs}
-                    onChange={(e) => setPlayerForm({ ...playerForm, runs: Number(e.target.value) })}
+                    onChange={(e) => setPlayerForm({ ...playerForm, runs: e.target.value })}
                   />
                 </div>
 
@@ -1711,7 +1568,7 @@ export default function Home() {
                     className="form-control" 
                     min="0" 
                     value={playerForm.highScore}
-                    onChange={(e) => setPlayerForm({ ...playerForm, highScore: Number(e.target.value) })}
+                    onChange={(e) => setPlayerForm({ ...playerForm, highScore: e.target.value })}
                   />
                 </div>
 
@@ -1722,7 +1579,7 @@ export default function Home() {
                     className="form-control" 
                     min="0" 
                     value={playerForm.wickets}
-                    onChange={(e) => setPlayerForm({ ...playerForm, wickets: Number(e.target.value) })}
+                    onChange={(e) => setPlayerForm({ ...playerForm, wickets: e.target.value })}
                   />
                 </div>
 
@@ -1733,7 +1590,7 @@ export default function Home() {
                     className="form-control" 
                     min="0" 
                     value={playerForm.bestBowlingRuns}
-                    onChange={(e) => setPlayerForm({ ...playerForm, bestBowlingRuns: Number(e.target.value) })}
+                    onChange={(e) => setPlayerForm({ ...playerForm, bestBowlingRuns: e.target.value })}
                     style={{ marginBottom: "0.5rem" }}
                   />
                 </div>
@@ -1745,7 +1602,7 @@ export default function Home() {
                     min="0" 
                     max="10" 
                     value={playerForm.bestBowlingWkts}
-                    onChange={(e) => setPlayerForm({ ...playerForm, bestBowlingWkts: Number(e.target.value) })}
+                    onChange={(e) => setPlayerForm({ ...playerForm, bestBowlingWkts: e.target.value })}
                   />
                 </div>
 
